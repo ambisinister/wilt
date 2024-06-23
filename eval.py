@@ -7,6 +7,7 @@ import re
 import openai
 import os
 from groq import Groq
+from anthropic import Anthropic
 
 import inspect
 
@@ -14,9 +15,13 @@ from tests import *
 
 openai_api_key = os.environ["OPENAI_API_KEY"]
 groq_api_key = os.environ["GROQ_API_KEY"]
+deepseek_api_key = os.environ["DEEPSEEK_API_KEY"]
+anthropic_api_key = os.environ["ANTHROPIC_API_KEY"]
 
 GROQ_MODELS = ["llama3-70b-8192", "llama3-8b-8192", "gemma-7b-it", "mixtral-8x7b-32768"]
 OPENAI_MODELS = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+DEEPSEEK_MODELS = ["deepseek-chat", "deepseek-coder"]
+ANTHROPIC_MODELS = ["claude-3-5-sonnet-20240620"]
 
 class LLMReasoningHarness:
     def __init__(self, model, rule_lambda, max_attempts=30):
@@ -28,11 +33,14 @@ class LLMReasoningHarness:
         self.model = model
 
         with open('./prompts/instruction.txt', 'r') as f:
-            system_prompt = f.read()
+            self.system_prompt = f.read()
 
-        self.conversation_history = [
-            {"role": "system", "content": system_prompt}
-        ]
+        if self.model not in ANTHROPIC_MODELS:
+            self.conversation_history = [
+                {"role": "system", "content": system_prompt}
+            ]
+        else:
+            self.conversation_history = [{"role": "user", "content": "Please begin."}]
 
     def test_case(self, x, y, z):
         if self.attempts >= self.max_attempts:
@@ -51,8 +59,10 @@ class LLMReasoningHarness:
 
     ## placeholder
     def guess_rule(self, guessed_lambda):
-        # Generate random test cases to compare the guessed lambda with the actual rule
-        test_inputs = [(random.uniform(1, 100), random.uniform(1, 100), random.uniform(1, 100)) for _ in range(10000)]
+        # tests
+        random_inputs = [(random.uniform(1, 100), random.uniform(1, 100), random.uniform(1, 100)) for _ in range(10000)]
+        grid_inputs = [(x, y, z) for x in range(-20, 21) for y in range(-20, 21) for z in range(-20, 21)]
+        test_inputs = random_inputs + grid_inputs
         
         if all(self.rule(*inputs) == guessed_lambda(*inputs) for inputs in test_inputs):
             return "Congratulations! Your guess is correct."
@@ -63,6 +73,12 @@ class LLMReasoningHarness:
         if self.model in GROQ_MODELS:
             client = Groq(api_key=groq_api_key)
             use_model = self.model
+        elif self.model in ANTHROPIC_MODELS:
+            client = Anthropic(api_key=anthropic_api_key)
+            use_model = self.model
+        elif self.model in DEEPSEEK_MODELS:
+            client = openai.OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
+            use_model = self.model
         else:
             openai.api_key = openai_api_key
             client = openai.OpenAI()
@@ -72,27 +88,44 @@ class LLMReasoningHarness:
 
         for attempt in range(max_retries):
             try:
-                response = client.chat.completions.create(
-                    model=use_model,
-                    messages=self.conversation_history
-                )
-            
-                return response.choices[0].message.content
+                if self.model in ANTHROPIC_MODELS:
+                    messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
+                    response = client.messages.create(
+                        model=use_model,
+                        max_tokens=1024,
+                        system=self.system_prompt,
+                        messages=messages
+                    )
+                    return response.content[0].text
+                else:
+                    response = client.chat.completions.create(
+                        model=use_model,
+                        messages=self.conversation_history
+                    )
+                    return response.choices[0].message.content
             except Exception as e:
                 print(f"Error {e}: Retry attempt {attempt+1}")
         return ""
     
     def interact_with_llm(self):
-        while self.attempts < self.max_attempts:
+        mulligan = False
+        while self.attempts <= self.max_attempts:
             model_response = self.model_perform_step()
             print(f"LLM: {model_response}")
             
             if "test case:" in model_response.lower():
-                match = re.search(r'Test Case:\s*\(([-+]?(?:\d*\.\d+|\d+))\s*,\s*([-+]?(?:\d*\.\d+|\d+))\s*,\s*([-+]?(?:\d*\.\d+|\d+))\)', model_response)
+                match = re.search(r'Test Case:\s*`+\(([-+]?(?:\d*\.\d+|\d+))\s*,\s*([-+]?(?:\d*\.\d+|\d+))\s*,\s*([-+]?(?:\d*\.\d+|\d+))\)`+', model_response)
 
                 if match:
                     numbers = tuple(map(float, match.groups()))
                     result = self.test_case(*numbers)
+                    mulligan = False
+                elif "```" not in model_response and not mulligan:
+                    result = "Please make sure your test and final guess are wrapped in backticks as instructed, e.g. Test Case: ```(0,0,0)``` and Final Guess: ```lambda x: x```"
+                    mulligan = True
+                elif mulligan:
+                    print("Harness: Still not following instructions, aborting")
+                    return {'points': 0, 'guesses': self.attempts}
                 else:
                     result = "Please provide exactly three numbers for the test case."
 
@@ -102,9 +135,10 @@ class LLMReasoningHarness:
 
                     
             elif "final guess:" in model_response.lower():
-                match = re.search(r'Final Guess:\s*(.+?)(?:\n|`|$)', model_response, re.IGNORECASE)
+                match = re.search(r'Final Guess:\s*`+(.+?)`+', model_response, re.DOTALL)
                 if match:
                     guess_str = match.group(1).strip()
+                    print(guess_str)
                     try:
                         guessed_lambda = eval(guess_str)
                         result = self.guess_rule(guessed_lambda)
@@ -117,15 +151,17 @@ class LLMReasoningHarness:
                         else:
                             return {'points': 0, 'guesses': self.attempts}
                     except:
-                        result = "Invalid lambda function. Please try again."
+                        result = "Invalid lambda function."
                         self.conversation_history.append({"role": "assistant", "content": model_response})
                         self.conversation_history.append({"role": "user", "content": result})
                         print(f"Harness: {result}")
+                        return {'points': 0, 'guesses': self.attempts}
                 else:
-                    result = "Unable to parse the lambda function. Please try again."
+                    result = "Unable to parse the lambda function."
                     self.conversation_history.append({"role": "assistant", "content": model_response})
                     self.conversation_history.append({"role": "user", "content": result})
                     print(f"Harness: {result}")
+                    return {'points': 0, 'guesses': self.attempts}
             else:
                 print("Harness: Doesn't seem like a guess or a test, retrying.")
 
@@ -141,15 +177,52 @@ def dump_results(model_name, accuracy, avg_guesses, points, full_context):
     json_file = f'./results/{model_name}_full_context.json'
     with open(json_file, 'w') as f:
         json.dump(full_context, f, indent=2)
+
+def save_checkpoint(model_name, current_test_idx, correct_answers, total_answers, points, attempts, full_context):
+    checkpoint = {
+        'current_test_idx': current_test_idx,
+        'correct_answers': correct_answers,
+        'total_answers': total_answers,
+        'points': points,
+        'attempts': attempts,
+        'full_context': full_context
+    }
+    
+    checkpoint_file = f'./checkpoints/{model_name}_checkpoint.json'
+    os.makedirs('./checkpoints', exist_ok=True)
+    with open(checkpoint_file, 'w') as f:
+        json.dump(checkpoint, f, indent=2)
+
+def load_checkpoint(model_name):
+    checkpoint_file = f'./checkpoints/{model_name}_checkpoint.json'
+    if os.path.exists(checkpoint_file):
+        with open(checkpoint_file, 'r') as f:
+            return json.load(f)
+    return None
+
                 
 def main(model):
-    correct_answers = 0
-    total_answers = 0
-    points = 0
-    attempts = []
-    full_context = []
-    
-    for test_idx, test_rule in TESTS.items():
+    checkpoint = load_checkpoint(model)
+    if checkpoint:
+        print("Resuming from checkpoint...")
+        current_test_idx = checkpoint['current_test_idx']
+        correct_answers = checkpoint['correct_answers']
+        total_answers = checkpoint['total_answers']
+        points = checkpoint['points']
+        attempts = checkpoint['attempts']
+        full_context = checkpoint['full_context']
+    else:
+        current_test_idx = 1
+        correct_answers = 0
+        total_answers = 0
+        points = 0
+        attempts = []
+        full_context = []
+
+    num_tests = len(TESTS)
+
+    for test_idx in range(current_test_idx, num_tests + 1):
+        test_rule = TESTS[str(test_idx)]
         print(inspect.getsource(test_rule))
         harness = LLMReasoningHarness(model=model, rule_lambda=test_rule)
         test_success = harness.interact_with_llm()
@@ -166,6 +239,9 @@ def main(model):
             'points': test_success['points'],
             'guesses': test_success['guesses']
         })
+
+        save_checkpoint(model, test_idx+1, correct_answers,
+                        total_answers, points, attempts, full_context)
 
     acc = correct_answers/total_answers
     avg_guesses = np.mean(attempts)
