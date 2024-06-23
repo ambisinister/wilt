@@ -1,4 +1,8 @@
+import numpy as np
 import random
+import argparse
+import json
+import csv
 import re
 import openai
 import os
@@ -10,6 +14,9 @@ from tests import *
 
 openai_api_key = os.environ["OPENAI_API_KEY"]
 groq_api_key = os.environ["GROQ_API_KEY"]
+
+GROQ_MODELS = ["llama3-70b-8192", "llama3-8b-8192", "gemma-7b-it", "mixtral-8x7b-32768"]
+OPENAI_MODELS = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
 
 class LLMReasoningHarness:
     def __init__(self, model, rule_lambda, max_attempts=30):
@@ -39,6 +46,9 @@ class LLMReasoningHarness:
         
         return f"Result for input ({x}, {y}, {z}): {result}. Attempts Remaining: {att_remaining}"
 
+    def bonus_points(self):
+        return 100 * (1 - (self.attempts / self.max_attempts))
+
     ## placeholder
     def guess_rule(self, guessed_lambda):
         # Generate random test cases to compare the guessed lambda with the actual rule
@@ -50,20 +60,27 @@ class LLMReasoningHarness:
             return "Sorry, that's not the correct rule."
 
     def model_perform_step(self):
-        if self.model == 'llama3-70b-8192':
+        if self.model in GROQ_MODELS:
             client = Groq(api_key=groq_api_key)
-            use_model = "llama3-70b-8192"
+            use_model = self.model
         else:
             openai.api_key = openai_api_key
             client = openai.OpenAI()
-            use_model = "gpt-4o"
-            
-        response = client.chat.completions.create(
-            model=use_model,
-            messages=self.conversation_history
-        )
+            use_model = self.model
 
-        return response.choices[0].message.content
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            try:
+                response = client.chat.completions.create(
+                    model=use_model,
+                    messages=self.conversation_history
+                )
+            
+                return response.choices[0].message.content
+            except Exception as e:
+                print(f"Error {e}: Retry attempt {attempt+1}")
+        return ""
     
     def interact_with_llm(self):
         while self.attempts < self.max_attempts:
@@ -76,11 +93,13 @@ class LLMReasoningHarness:
                 if match:
                     numbers = tuple(map(float, match.groups()))
                     result = self.test_case(*numbers)
-                    self.conversation_history.append({"role": "assistant", "content": model_response})
-                    self.conversation_history.append({"role": "user", "content": result})
-                    print(f"Harness: {result}")
                 else:
-                    print("Harness: Please provide exactly three numbers for the test case.")
+                    result = "Please provide exactly three numbers for the test case."
+
+                print(f"Harness: {result}")
+                self.conversation_history.append({"role": "assistant", "content": model_response})
+                self.conversation_history.append({"role": "user", "content": result})
+
                     
             elif "final guess:" in model_response.lower():
                 match = re.search(r'Final Guess:\s*(.+?)(?:\n|`|$)', model_response, re.IGNORECASE)
@@ -92,28 +111,77 @@ class LLMReasoningHarness:
                         self.conversation_history.append({"role": "assistant", "content": model_response})
                         self.conversation_history.append({"role": "user", "content": result})
                         print(f"Harness: {result}")
+                        
                         if 'congratulations' in result.lower():
-                            return True
+                            return {'points': 1000 + self.bonus_points(), 'guesses': self.attempts}
                         else:
-                            return False
+                            return {'points': 0, 'guesses': self.attempts}
                     except:
-                        print("Harness: Invalid lambda function. Please try again.")
+                        result = "Invalid lambda function. Please try again."
+                        self.conversation_history.append({"role": "assistant", "content": model_response})
+                        self.conversation_history.append({"role": "user", "content": result})
+                        print(f"Harness: {result}")
                 else:
-                    print("Harness: Unable to parse the lambda function. Please try again.")
+                    result = "Unable to parse the lambda function. Please try again."
+                    self.conversation_history.append({"role": "assistant", "content": model_response})
+                    self.conversation_history.append({"role": "user", "content": result})
+                    print(f"Harness: {result}")
             else:
-                print("Harness: Doesn't seem like a guess or a test.")
+                print("Harness: Doesn't seem like a guess or a test, retrying.")
+
+def dump_results(model_name, accuracy, avg_guesses, points, full_context):
+    os.makedirs('./results', exist_ok=True)
     
-if __name__ == '__main__':
+    csv_file = f'./results/{model_name}_results.csv'
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['accuracy', 'avg_guesses', 'points'])
+        writer.writerow([accuracy, avg_guesses, points])
+    
+    json_file = f'./results/{model_name}_full_context.json'
+    with open(json_file, 'w') as f:
+        json.dump(full_context, f, indent=2)
+                
+def main(model):
     correct_answers = 0
     total_answers = 0
+    points = 0
+    attempts = []
+    full_context = []
     
     for test_idx, test_rule in TESTS.items():
         print(inspect.getsource(test_rule))
-        harness = LLMReasoningHarness(model='llama3-70b-8192', rule_lambda=test_rule)
+        harness = LLMReasoningHarness(model=model, rule_lambda=test_rule)
         test_success = harness.interact_with_llm()
 
-        if test_success:
+        if test_success['points'] != 0:
             correct_answers += 1
+        points += test_success['points']
         total_answers += 1
+        attempts.append(test_success['guesses'])
 
-    print(f"Final Result: {correct_answers} / {total_answers}")
+        full_context.append({
+            'test_index': test_idx,
+            'conversation_history': harness.conversation_history,
+            'points': test_success['points'],
+            'guesses': test_success['guesses']
+        })
+
+    acc = correct_answers/total_answers
+    avg_guesses = np.mean(attempts)
+
+    print("===========")
+    print("Final Result")
+    print(f"Accuracy: {correct_answers} / {total_answers} = {acc}")
+    print(f"Average Tests = {avg_guesses}")
+    print(f"Total Points = {points}")
+
+    dump_results(model, acc, avg_guesses, points, full_context)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="LLM Reasoning Harness")
+    parser.add_argument('--model', type=str, default='llama3-70b-8192',
+                        help='Model to use (e.g. llama3-70b-8192)')
+    args = parser.parse_args()
+    main(args.model)
+    
