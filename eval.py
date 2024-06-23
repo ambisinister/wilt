@@ -35,8 +35,9 @@ class LLMReasoningHarness:
         self.attempts += 1
         self.test_cases.append((x, y, z))
         self.results.append(result)
+        att_remaining = self.max_attempts - self.attempts
         
-        return f"Result for input ({x}, {y}, {z}): {result}"
+        return f"Result for input ({x}, {y}, {z}): {result}. Attempts Remaining: {att_remaining}"
 
     ## placeholder
     def guess_rule(self, guessed_lambda):
