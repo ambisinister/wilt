@@ -14,14 +14,7 @@ class LLMReasoningHarness:
         with open('./prompts/instruction.txt', 'r') as f:
             self.system_prompt = f.read()
 
-        self.conversation_history = self._initialize_conversation()
-
-    def _initialize_conversation(self):
-        if self.model.model_name not in ["claude-3-5-sonnet-20240620"]:
-            role = "user" if "Phi" in self.model.model_name else "system"
-            return [{"role": role, "content": self.system_prompt}]
-        else:
-            return [{"role": "user", "content": "Please begin."}]
+        self.conversation_history = self.model.initialize_conversation()
 
     def test_case(self, x, y, z):
         if self.attempts >= self.max_attempts:

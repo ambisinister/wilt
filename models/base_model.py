@@ -7,3 +7,7 @@ class BaseModel(ABC):
     @abstractmethod
     def perform_step(self, conversation_history):
         pass
+
+    @abstractmethod
+    def initialize_conversation(self):
+        pass

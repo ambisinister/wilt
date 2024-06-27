@@ -19,3 +19,9 @@ class GroqModel(BaseModel):
         except Exception as e:
             print(f"Error in GroqModel: {e}")
             return ""
+
+    def initialize_conversation(self):
+        with open('./prompts/instruction.txt', 'r') as f:
+            system_prompt = f.read()
+
+        return [{"role": "system", "content": system_prompt}]
