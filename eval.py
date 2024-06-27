@@ -1,3 +1,7 @@
+"""
+Deprecated, will delete once everything is confirmed working again
+"""
+
 #standard lib
 import numpy as np
 import random
