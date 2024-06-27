@@ -1,17 +1,28 @@
+#standard lib
 import numpy as np
 import random
 import argparse
 import json
 import csv
 import re
-import openai
 import os
+import inspect
+
+#apis
+import openai
 from groq import Groq
 from anthropic import Anthropic
 
-import inspect
+#local
+import torch
+from transformers import LlamaForCausalLM, AutoModelForCausalLM, AutoTokenizer, pipeline, TextIteratorStreamer
+from threading import Thread
+import flash_attn, bitsandbytes
 
+#in proj
 from tests import *
+
+torch.random.manual_seed(0)
 
 openai_api_key = os.environ["OPENAI_API_KEY"]
 groq_api_key = os.environ["GROQ_API_KEY"]
@@ -22,6 +33,8 @@ GROQ_MODELS = ["llama3-70b-8192", "llama3-8b-8192", "gemma-7b-it", "mixtral-8x7b
 OPENAI_MODELS = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
 DEEPSEEK_MODELS = ["deepseek-chat", "deepseek-coder"]
 ANTHROPIC_MODELS = ["claude-3-5-sonnet-20240620"]
+
+LOCAL_MODELS = ["microsoft/Phi-3-mini-4k-instruct", "NousResearch/Hermes-2-Theta-Llama-3-8B"]
 
 class LLMReasoningHarness:
     def __init__(self, model, rule_lambda, max_attempts=30):
@@ -36,8 +49,12 @@ class LLMReasoningHarness:
             self.system_prompt = f.read()
 
         if self.model not in ANTHROPIC_MODELS:
+            if "Phi" in self.model:
+                this_role = "user"
+            else:
+                this_role = "system"
             self.conversation_history = [
-                {"role": "system", "content": system_prompt}
+                {"role": this_role, "content": self.system_prompt}
             ]
         else:
             self.conversation_history = [{"role": "user", "content": "Please begin."}]
@@ -69,6 +86,13 @@ class LLMReasoningHarness:
         else:
             return "Sorry, that's not the correct rule."
 
+    def process_chat(self):
+        msgs = []
+        for m in self.conversation_history:
+            msgs.append(f"<|im_start|>{m['role']}\n{m['content']}<|im_end|>")
+            msgs.append("<|im_start|>assistant")
+        return '\n'.join(msgs)
+
     def model_perform_step(self):
         if self.model in GROQ_MODELS:
             client = Groq(api_key=groq_api_key)
@@ -79,6 +103,17 @@ class LLMReasoningHarness:
         elif self.model in DEEPSEEK_MODELS:
             client = openai.OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
             use_model = self.model
+        elif self.model in LOCAL_MODELS:
+            model = LlamaForCausalLM.from_pretrained(
+                self.model,
+                device_map="auto",
+                torch_dtype=torch.float16,
+                load_in_8bit=True,
+                load_in_4bit=False,
+                trust_remote_code=True,
+                use_flash_attention_2=True
+            )
+            tokenizer = AutoTokenizer.from_pretrained(self.model)
         else:
             openai.api_key = openai_api_key
             client = openai.OpenAI()
@@ -88,6 +123,31 @@ class LLMReasoningHarness:
 
         for attempt in range(max_retries):
             try:
+                if self.model in LOCAL_MODELS:
+                    msg_text = self.process_chat()
+                    input_ids = tokenizer(msg_text, return_tensors="pt").input_ids.to("cuda")
+                    streamer = TextIteratorStreamer(tokenizer, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+                    generation_kwargs = {
+                        "input_ids": input_ids,
+                        "max_new_tokens": 750,
+                        "temperature": 0.8,
+                        "repetition_penalty": 1.1,
+                        "do_sample": True,
+                        "eos_token_id": tokenizer.eos_token_id,
+                        "streamer": streamer
+                    }
+                    
+                    thread = Thread(target=model.generate, kwargs=generation_kwargs)
+                    thread.start()
+
+                    response = ""
+                    for new_text in streamer:
+                        print(new_text, end='', flush=True)
+                        response += new_text
+
+                    thread.join()
+                    return response[len(msg_text):].strip()
+                    
                 if self.model in ANTHROPIC_MODELS:
                     messages = [{"role": msg["role"], "content": msg["content"]} for msg in self.conversation_history]
                     response = client.messages.create(
@@ -256,7 +316,7 @@ def main(model):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="LLM Reasoning Harness")
-    parser.add_argument('--model', type=str, default='llama3-70b-8192',
+    parser.add_argument('--model', type=str, default="NousResearch/Hermes-2-Theta-Llama-3-8B",
                         help='Model to use (e.g. llama3-70b-8192)')
     args = parser.parse_args()
     main(args.model)
