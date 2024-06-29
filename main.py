@@ -63,7 +63,7 @@ def main(model_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="LLM Reasoning Harness")
-    parser.add_argument('--model', type=str, default="llama3-70b-8192",
+    parser.add_argument('--model', type=str, default="NousResearch/Hermes-2-Theta-Llama-3-8B",
                         help='Model to use (e.g. llama3-70b-8192)')
     args = parser.parse_args()
     main(args.model)

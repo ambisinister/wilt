@@ -2,7 +2,7 @@
 from .groq_model import GroqModel
 #from .anthropic_model import AnthropicModel
 #from .deepseek_model import DeepseekModel
-#from .local_model import LocalModel
+from .hermes_model import LocalModel
 
 class ModelFactory:
     @staticmethod
