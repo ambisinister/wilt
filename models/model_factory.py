@@ -3,6 +3,7 @@ from .groq_model import GroqModel
 #from .anthropic_model import AnthropicModel
 #from .deepseek_model import DeepseekModel
 from .hermes_model import LocalModel
+from .phi_model import PhiModel
 
 class ModelFactory:
     @staticmethod
@@ -15,7 +16,9 @@ class ModelFactory:
             return AnthropicModel(model_name)
         elif model_name in ["deepseek-chat", "deepseek-coder"]:
             return DeepseekModel(model_name)
-        elif model_name in ["microsoft/Phi-3-mini-4k-instruct", "NousResearch/Hermes-2-Theta-Llama-3-8B"]:
+        elif model_name in ["NousResearch/Hermes-2-Theta-Llama-3-8B"]:
             return LocalModel(model_name)
+        elif model_name in ["microsoft/Phi-3-mini-4k-instruct", "microsoft/Phi-3-small-8k-instruct"]:
+            return PhiModel(model_name)
         else:
             raise ValueError(f"Unknown model: {model_name}")
