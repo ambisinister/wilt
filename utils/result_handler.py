@@ -2,7 +2,11 @@ import os
 import csv
 import json
 
+def sanitize_model_name(model_name):
+    return model_name.replace("/", "__")
+
 def dump_results(model_name, accuracy, avg_guesses, points, full_context):
+    model_name = sanitize_model_name(model_name)
     os.makedirs('./results', exist_ok=True)
     
     # Dump CSV results

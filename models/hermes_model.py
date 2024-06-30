@@ -1,7 +1,3 @@
-"""
-TODO: Deprecate, doubt this will be flexible enough to be useful for all model types
-"""
-
 from .base_model import BaseModel
 import torch
 from transformers import LlamaForCausalLM, AutoTokenizer, TextIteratorStreamer
@@ -42,26 +38,29 @@ class LocalModel(BaseModel):
             self.model += context(conversation_history[-1]['content'])
 
         ## add next test case here
-        ## TODO: Don't let it yap after the test case
         @guidance
         def guide(lm):
-            lm += gen('logic', stop='\n')
-            lm += select([
-                f"Test Case:```({gen('x', stop=',')},{gen('y', stop=',')},{gen('z', stop=')')})`",
-                f"Final Guess: ```lambda x,y,z:{gen('guess', stop='`')}`"
-                ])
+            newline = '\n'
+            lm += "<|im_start|>assistant\n"
+            lm += f"Reasoning: {gen('logic', stop=[newline, 'Test Case:', 'Final Guess:'])}\n"
+            lm += select(["Test Case: ```",
+                          "Final Guess: ```"])
+            lm += gen("selection", stop="`")
+            lm += "```\n<|im_end|>\n"
             return lm
 
         self.model += guide()
         response = str(self.model)
 
-        return response
-
-            
-        try:
-            return str(self.model)
-        except Exception as e:
-            print(f"Error in LocalModel: {e}")
+        start_tag = "<|im_start|>assistant"
+        end_tag = "<|im_end|>"
+        start_index = response.rfind(start_tag)
+        end_index = response.rfind(end_tag)
+    
+        if start_index != -1 and end_index != -1 and start_index < end_index:
+            extracted_response = response[start_index + len(start_tag):end_index].strip()
+            return extracted_response
+        else:
             return ""
 
     def process_chat(self, conversation_history):

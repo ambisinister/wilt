@@ -3,3 +3,4 @@ __pycache__/
 results/*
 checkpoints/*
 tests_draft.py
+venv/
