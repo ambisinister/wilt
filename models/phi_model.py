@@ -21,9 +21,6 @@ class PhiModel(BaseModel):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name,
                                                        use_fast=False,
                                                        trust_remote_code=True)
-        special_tokens = ['•', '¶', '∂', 'ƒ', '˙', '∆', '£', 'Ħ', '爨', 'ൠ', 'ᅘ', '∰', '፨']
-        self.tokenizer.add_special_tokens({'additional_special_tokens': special_tokens})
-        model_obj.resize_token_embeddings(len(self.tokenizer))
         self.model = guidance.models.Transformers(model_obj, self.tokenizer, echo=False)
 
     def perform_step(self, conversation_history):
