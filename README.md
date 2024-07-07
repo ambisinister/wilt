@@ -1,6 +1,6 @@
 # WILT: Wason Inductive Logic Test
 
-![A dropcap W](docs/wilt.png)
+<img src="https://github.com/ambisinister/wilt/blob/main/docs/wilt.png?raw=true" width="128">
 
 **WILT** a simple, general, multi-turn inductive logic test for language models. The test is comprised of simple black-box functions of three variables, where you may test up to 30 examples in order to observe the input-output relationships of these functions.
 
