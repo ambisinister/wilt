@@ -79,5 +79,3 @@ TESTS = {
     # Arithmetic Mean
     '50': lambda x, y, z: (x + y) / 2 == z
 }
-
-print(TESTS)
