@@ -1,7 +1,7 @@
-#from .openai_model import OpenAIModel
+from .openai_model import OpenAIModel
 from .groq_model import GroqModel
-#from .anthropic_model import AnthropicModel
-#from .deepseek_model import DeepseekModel
+from .anthropic_model import AnthropicModel
+from .deepseek_model import DeepseekModel
 from .hermes_model import LocalModel
 from .phi_model import PhiModel
 
