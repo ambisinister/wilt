@@ -73,9 +73,9 @@ TESTS = {
     '45': lambda x, y, z: min(x, y, z) == y,
     '46': lambda x, y, z: min(x, y, z) == z,
     # Evil Float Cases
-    '47': lambda x, y, z: (0 < x % 1) and (0 < y % 1) and (0 < z % 1)
+    '47': lambda x, y, z: (0 < x % 1) and (0 < y % 1) and (0 < z % 1),
     '48': lambda x, y, z: 0 < x % 1 < y % 1 < z % 1 < 1,
-    '49': lambda x, y, z: (x < y < z) and (0 < z - x <= 1)
+    '49': lambda x, y, z: (x < y < z) and (0 < z - x <= 1),
     # Arithmetic Mean
-    '50': lambda x, y, z: (x + y) / 2 == z
+    '50': lambda x, y, z: (x + y) / 2 == z,
 }
