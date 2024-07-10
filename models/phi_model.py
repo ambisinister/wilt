@@ -2,9 +2,11 @@ from .base_model import BaseModel
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from threading import Thread
-import guidance
 
-from guidance import gen, select
+#import guidance
+from .guidance import guidance
+from .guidance.guidance import gen, select
+from .guidance.guidance import models
 
 class PhiModel(BaseModel):
     def __init__(self, model_name):
@@ -21,7 +23,7 @@ class PhiModel(BaseModel):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name,
                                                        use_fast=False,
                                                        trust_remote_code=True)
-        self.model = guidance.models.Transformers(model_obj, self.tokenizer, echo=False)
+        self.model = models.Transformers(model_obj, self.tokenizer, echo=False)
 
     def perform_step(self, conversation_history):
 

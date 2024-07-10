@@ -31,17 +31,24 @@ class LLMReasoningHarness:
     def bonus_points(self):
         return 100 * (1 - (self.attempts / self.max_attempts))
 
-    # placeholder
     def guess_rule(self, guessed_lambda):
         # tests
         random_inputs = [(random.uniform(1, 100), random.uniform(1, 100), random.uniform(1, 100)) for _ in range(10000)]
         grid_inputs = [(x, y, z) for x in range(-20, 21) for y in range(-20, 21) for z in range(-20, 21)]
         test_inputs = random_inputs + grid_inputs
+
+        all_correct = all(self.rule(*inputs) == guessed_lambda(*inputs) for inputs in test_inputs)
         
-        if all(self.rule(*inputs) == guessed_lambda(*inputs) for inputs in test_inputs):
-            return "Congratulations! Your guess is correct."
+        if all_correct:
+            return 1000
         else:
-            return "Sorry, that's not the correct rule."
+            # pity score to reward good but wrong guesses above complete whiffs
+            # only give pity score based on integer values, since otherwise randomness affects score
+            integer_cases = sum(1 for inputs in grid_inputs if self.rule(*inputs) == guessed_lambda(*inputs))
+            total_integer_cases = len(grid_inputs)
+            pct = integer_cases / total_integer_cases
+        
+            return int(400 * pct)
 
     def interact_with_llm(self):
         mulligan = False
@@ -88,12 +95,14 @@ class LLMReasoningHarness:
             try:
                 guessed_lambda = eval(guess_str)
                 result = self.guess_rule(guessed_lambda)
-                self._update_conversation(model_response, result)
+                forward_msg = "Congratulations! Your guess is correct." if result == 1000 \
+                    else "Sorry, that's not the correct rule"
+                self._update_conversation(model_response, forward_msg)
             
-                if 'congratulations' in result.lower():
-                    return {'points': 1000 + self.bonus_points(), 'guesses': self.attempts}
+                if result == 1000:
+                    return {'points': result + self.bonus_points(), 'guesses': self.attempts}
                 else:
-                    return {'points': 0, 'guesses': self.attempts}
+                    return {'points': result, 'guesses': self.attempts}
             except:
                 result = "Invalid lambda function."
                 self._update_conversation(model_response, result)
