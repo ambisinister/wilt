@@ -34,7 +34,7 @@ def main(model_name):
         harness = LLMReasoningHarness(model=model, rule_lambda=test_rule)
         test_success = harness.interact_with_llm()
 
-        if test_success['points'] != 0:
+        if test_success['points'] >= 1000:
             correct_answers += 1
         points += test_success['points']
         total_answers += 1

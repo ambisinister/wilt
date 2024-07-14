@@ -4,9 +4,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from threading import Thread
 
 #import guidance
-from .guidance import guidance
-from .guidance.guidance import gen, select
-from .guidance.guidance import models
+from guidance import guidance
+from guidance import gen, select
+from guidance import models
 
 class PhiModel(BaseModel):
     def __init__(self, model_name):

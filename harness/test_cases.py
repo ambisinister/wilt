@@ -1,3 +1,5 @@
+import math
+
 TESTS_LITE = {
     '1': lambda x, y, z: x > y > z,
     '2': lambda x, y, z: x < y < z,
@@ -51,13 +53,13 @@ TESTS = {
     '28': lambda x, y, z: x**2 + z**2 == y**2,
     '29': lambda x, y, z: y**2 + z**2 == x**2,
     # Bitwise Operations
-    '30': lambda x, y, z: (x & y) == z,
-    '31': lambda x, y, z: (x | y) == z,
-    '32': lambda x, y, z: (x ^ y) == z,
+    '30': lambda x, y, z: (int(x) & int(y)) == int(z),
+    '31': lambda x, y, z: (int(x) | int(y)) == int(z),
+    '32': lambda x, y, z: (int(x) ^ int(y)) == int(z),
     # Coprimality
-    '33': lambda x, y, z: all(__gcd(a, b) == 1 for a, b in [(x, y), (y, z), (z, x)]),
+    '33': lambda x, y, z: all([m % 1 == 0 for m in [x, y, z]]) and all(math.gcd(int(a), int(b)) == 1 for a, b in [(x, y), (y, z), (z, x)]),
     # Perfect Squares
-    '34': lambda x, y, z: all(int(n**0.5)**2 == n for n in (x, y, z)),
+    '34': lambda x, y, z: all(int(abs(n)**0.5)**2 == n for n in (x, y, z)),
     # Sums / Products
     '35': lambda x, y, z: (x + y + z) == 0,
     '36': lambda x, y, z: (x * y * z) == 0,

@@ -15,8 +15,8 @@ class AnthropicModel(BaseModel):
             response = self.client.messages.create(
                 model=self.model_name,
                 max_tokens=1024,
-                system=self.system_prompt
-                messages=conversation_history
+                system=self.system_prompt,
+                messages=conversation_history,
             )
             return response.content[0].text
         except Exception as e:

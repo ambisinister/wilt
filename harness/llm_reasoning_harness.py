@@ -1,5 +1,6 @@
 import random
 import re
+import math
 from .test_cases import TESTS
 
 class LLMReasoningHarness:
@@ -19,7 +20,7 @@ class LLMReasoningHarness:
     def test_case(self, x, y, z):
         if self.attempts >= self.max_attempts:
             return "Maximum attempts reached. Please make a guess."
-        
+
         result = self.rule(x, y, z)
         self.attempts += 1
         self.test_cases.append((x, y, z))
@@ -95,8 +96,8 @@ class LLMReasoningHarness:
             try:
                 guessed_lambda = eval(guess_str)
                 result = self.guess_rule(guessed_lambda)
-                forward_msg = "Congratulations! Your guess is correct." if result == 1000 \
-                    else "Sorry, that's not the correct rule"
+                forward_msg = "Congratulations! Your guess is correct. SCORE: 1000" if result == 1000 \
+                    else f"Sorry, that's not the correct rule. SCORE {result}"
                 self._update_conversation(model_response, forward_msg)
             
                 if result == 1000:
