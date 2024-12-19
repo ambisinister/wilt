@@ -1,5 +1,9 @@
 # WILT: Wason Inductive Logic Test
 
+**THIS REPO IS OUTMODED**
+
+The new repo for this project can be found at [https://github.com/riotgames/wilt](https://github.com/riotgames/wilt).
+
 <p align="center">
     <img src="https://github.com/ambisinister/wilt/blob/main/docs/wilt.png?raw=true" width="128">
 </p>
